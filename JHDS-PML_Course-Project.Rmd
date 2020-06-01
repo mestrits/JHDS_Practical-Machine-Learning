@@ -1,0 +1,206 @@
+---
+title: "JHDS_Practical-Machine-Learning_Course-Project"
+author: "JEMestrits"
+date: "5/28/2020"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Synopsis 
+
+The basic goal of this paper is to use machine learning to help predict the class of movement for various excercises. This is also my submission for the course project for the Johns Hopkins Data Science Coursera course, Practical Machine Learning class.
+
+At the end of the solution code, we can see that we have performed a random forest model on a test set of data which was unclassified.  This information was submitted online and found to be 100% accurate.  The final model was selected due to it's performance as the most accurate model.  That said, other models were attempted for comparison sake, and did offer comparable results with less computational complexity.
+
+# Assignment Details 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+* Class A - exactly according to the specification  
+* Class B - throwing the elbows to the front 
+* Class C - lifting the dumbbell only halfway 
+* Class D - lowering the dumbbell only halfway
+* Class E - throwing the hips to the front 
+
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+http://groupware.les.inf.puc-rio.br/har#ixzz6NlPJegqA
+
+# Solution Approach and Details
+
+```{r  results='hide', message=FALSE, warning=FALSE, cache = TRUE}
+
+# As we get started let us...  
+# Set a working directory
+setwd("~/Documents/1_KM/1- EdX_Coursera_Udemy_Moocs/JHDS - Practical Machine Learning/Final_Project-PML-JHDS")
+
+# Clear the current workspace
+rm(list=ls())                
+
+# Set the seed
+set.seed(007)
+
+#install the necessary libraries
+library(knitr, warn.conflicts = FALSE)
+library(caret, warn.conflicts = FALSE) #will also install lattice, ggplot2
+library(tidyr, warn.conflicts = FALSE)
+library(randomForest, warn.conflicts = FALSE)
+library(rattle, warn.conflicts = FALSE)
+library(rpart, warn.conflicts = FALSE)
+library(rpart.plot, warn.conflicts = FALSE)
+library(gbm, warn.conflicts = FALSE)
+
+
+```
+
+# Load the data
+
+```{r  results='hide', message=FALSE, warning=FALSE, cache = TRUE}
+
+data_training <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"), header=TRUE, na.strings = c("NA", "#DIV/0!", ""))
+
+data_testing <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"), header=TRUE, na.strings = c("NA", "#DIV/0!", ""))
+
+# FYI: na.strings = c("NA", "#DIV/0!", "") helps catch additional empty values other than explicit "NA's"
+
+## If desired you can explore the data as follows...
+# head(data_training)
+# dim(data_training)
+# str(data_training)
+# summary(data_training)
+
+```
+
+
+## Data Preparation
+```{r, echo=TRUE , cache = TRUE, message=FALSE, warning=FALSE }
+
+# Inspect for missing values
+
+missing_values <- apply(data_training, 2, function(x) sum(is.na(x)/length(x))) 
+# 2 indicates columns, 1 is rows, c(1,2) is ROWS AND COLUMNS...
+#this returns a vector with the % of NA's in each variable column
+ 
+
+#Remove columns
+removeNA_training <- data_training[,colSums(is.na(data_training))==0]
+removeNA_testing <- data_testing[,colSums(is.na(data_testing))==0]
+
+
+dim(removeNA_training)
+#removes 100 variables that contain NA's
+dim(removeNA_testing)
+#removes 100 variables
+
+
+# So now our training and test data sets contain 60 variable columns...However, we can also remove the first 7 variables that don't contain useful information.
+# ( FYI - These rows include Timestamps, User information and window details)
+
+
+## Setting up the final training, validation and testing data sets
+
+training <- removeNA_training[, -c(1:7)]
+testing <- removeNA_testing[, -c(1:7)]
+
+dim(training)
+dim(testing)
+
+# Here we can validate that the remaining variables are complete, and do not have missing values
+table(complete.cases(training))
+
+# We are left with 53 variables.  The next step is to break these into training and testing data sets.
+
+split_training <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+in_training <- training[split_training, ] 
+validation <- training[-split_training, ]
+#str(training)
+
+#Let's take a look at the classe variable we are attempting to predict
+summary(training$classe)
+
+
+```
+
+
+
+# Prediction modeling methods
+
+In the following chunks of code, I have trained models using gradient boosting, classification trees, and random forest.  I will however comment out these models with the expection of a random forest model where I have limited the number of trees. I've commented out these other models, due to the time it would take to reprocess them.  The full random forest model took over an hour, and I fell asleep the othernight while the gbm model was training, so not sure how long that ran for.   
+
+I have however included the code as a reference, and have listed the accuracy from these models.  I will be returning to this script to explore additional tuning parameters for the GBM and RF models, in particular which were long running, but didn't have the time to complete this before submission of this assignment.
+
+```{r, echo=TRUE , cache = TRUE, message=FALSE, warning=FALSE }
+#model_gbm   <- train(classe ~ ., data = in_training, method = "gbm")
+model_classification_tree <- rpart(classe ~ ., data = in_training, method = "class")
+#model_randomforest <- train(classe ~ ., data = in_training, method = "rf")
+model2_randomforest <- train(classe ~ ., data = in_training, method = "rf", ntree = 3)
+
+
+## Prediction
+
+# Gradient Boosting Machine Model
+# predict_gbm <- predict(model_gbm, validation)
+# confusionMatrix(predict_gbm, validation$classe)
+####  96.1% Accuracy
+
+## Classification Tree Model
+predict_classification_tree <- predict(model_classification_tree, validation, type = "class")
+confusionMatrix(predict_classification_tree, validation$classe)
+# 74.1% Accuracy
+
+## Random Forest Model
+# predict_randomforest <- predict(model_randomforest, validation)
+# confusionMatrix(predict_randomforest , validation$classe)
+####  99.3% Accuracy
+
+## Random Forest limited to 3 trees
+predict_randomforest2 <- predict(model2_randomforest, validation)
+confusionMatrix(predict_randomforest2 , validation$classe)
+# ~97% Accuracy
+
+
+```
+
+
+## Conclusion
+
+We can now apply the trained model to predict the class values on the test data set. Even with a less complex model, we were able to predict 95% of the classification variance. In the appendix, we can see that there are alternative methods to reduce complexity, but can expect that with a more expensive we can improve accuracy and reduce variance even further. 
+
+
+```{r, echo=TRUE , cache = TRUE, message=FALSE, warning=FALSE }
+##  Final Model Validation 
+#  Predicted Classification submitted online to validate answers, and was found to be 95% accurate (19 of 20 cases predicted successfully).
+
+# However the full (unrestricted) random forest was able to correctly predict all 20 cases.
+
+final_testing <- predict(model2_randomforest, testing)
+final_testing 
+
+```
+
+
+## Appendix
+
+We can see here a visualization of the classification tree model.
+```{r, echo=TRUE , cache = TRUE, message=FALSE, warning=FALSE }
+fancyRpartPlot(model_classification_tree)
+```
+
+
+# Variable Selection
+
+I ended up using all 53 variables in my prediction models, but given more time to optimize performance, I would limit the number of variables to help minimize the computational expense.
+
+Below we can see how using Priciple Component Analysis, we can explain 95% of the variance with only 25 of the variables.
+
+I ended up being able to explain greater than 95% variance with a more expensive model.
+
+```{r, echo=TRUE , cache = TRUE, message=FALSE, warning=FALSE }
+PCA <- preProcess(in_training, method="pca", thresh=0.95)
+PCA
+```
